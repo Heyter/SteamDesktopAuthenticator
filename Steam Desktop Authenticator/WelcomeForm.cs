@@ -1,12 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Steam_Desktop_Authenticator
@@ -21,27 +14,28 @@ namespace Steam_Desktop_Authenticator
             man = Manifest.GetManifest();
         }
 
-        private void btnJustStart_Click(object sender, EventArgs e)
+        private void BtnJustStart_Click(object sender, EventArgs e)
         {
             // Mark as not first run anymore
             man.FirstRun = false;
             man.Save();
 
-            showMainForm();
+            ShowMainForm();
         }
 
-        private void btnImportConfig_Click(object sender, EventArgs e)
+        private void BtnImportConfig_Click(object sender, EventArgs e)
         {
             // Let the user select the config dir
-            FolderBrowserDialog folderBrowser = new FolderBrowserDialog();
-            folderBrowser.Description = "Select the folder of your old Steam Desktop Authenticator install";
+            FolderBrowserDialog folderBrowser = new()
+            {
+                Description = "Select the folder of your old Steam Desktop Authenticator install"
+            };
             DialogResult userClickedOK = folderBrowser.ShowDialog();
 
             if (userClickedOK == DialogResult.OK)
             {
                 string path = folderBrowser.SelectedPath;
-                string pathToCopy = null;
-
+                string pathToCopy;
                 if (Directory.Exists(path + "/maFiles"))
                 {
                     // User selected the root install dir
@@ -101,12 +95,12 @@ namespace Steam_Desktop_Authenticator
 
                 // All done!
                 MessageBox.Show("All accounts and settings have been imported! Click OK to continue.", "Import accounts", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                showMainForm();
+                ShowMainForm();
             }
 
         }
 
-        private void showMainForm()
+        private void ShowMainForm()
         {
             this.Hide();
             new MainForm().Show();

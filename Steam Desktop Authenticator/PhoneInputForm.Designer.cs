@@ -48,8 +48,8 @@
             this.txtCountryCode.Name = "txtCountryCode";
             this.txtCountryCode.Size = new System.Drawing.Size(68, 33);
             this.txtCountryCode.TabIndex = 0;
-            this.txtCountryCode.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.txtCountryCode_KeyPress);
-            this.txtCountryCode.Leave += new System.EventHandler(this.txtCountryCode_Leave);
+            this.txtCountryCode.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.TxtCountryCode_KeyPress);
+            this.txtCountryCode.Leave += new System.EventHandler(this.TxtCountryCode_Leave);
             // 
             // label1
             // 
@@ -94,7 +94,7 @@
             this.txtPhoneNumber.Size = new System.Drawing.Size(198, 33);
             this.txtPhoneNumber.TabIndex = 4;
             this.txtPhoneNumber.Text = "+1 ";
-            this.txtPhoneNumber.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.txtPhoneNumber_KeyPress);
+            this.txtPhoneNumber.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.TxtPhoneNumber_KeyPress);
             // 
             // btnSubmit
             // 
@@ -106,7 +106,7 @@
             this.btnSubmit.TabIndex = 5;
             this.btnSubmit.Text = "Submit";
             this.btnSubmit.UseVisualStyleBackColor = true;
-            this.btnSubmit.Click += new System.EventHandler(this.btnSubmit_Click);
+            this.btnSubmit.Click += new System.EventHandler(this.BtnSubmit_Click);
             // 
             // btnCancel
             // 
@@ -119,7 +119,7 @@
             this.btnCancel.TabIndex = 6;
             this.btnCancel.Text = "Cancel";
             this.btnCancel.UseVisualStyleBackColor = true;
-            this.btnCancel.Click += new System.EventHandler(this.btnCancel_Click);
+            this.btnCancel.Click += new System.EventHandler(this.BtnCancel_Click);
             // 
             // PhoneInputForm
             // 

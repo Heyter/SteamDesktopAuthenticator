@@ -7,7 +7,7 @@ namespace Steam_Desktop_Authenticator
 {
     public partial class PhoneInputForm : Form
     {
-        private SteamGuardAccount Account;
+        private readonly SteamGuardAccount Account;
         public string PhoneNumber;
         public string CountryCode;
         public bool Canceled;
@@ -18,7 +18,7 @@ namespace Steam_Desktop_Authenticator
             InitializeComponent();
         }
 
-        private void btnSubmit_Click(object sender, EventArgs e)
+        private void BtnSubmit_Click(object sender, EventArgs e)
         {
             this.PhoneNumber = txtPhoneNumber.Text;
             this.CountryCode = txtCountryCode.Text;
@@ -32,44 +32,49 @@ namespace Steam_Desktop_Authenticator
             this.Close();
         }
 
-        private void txtPhoneNumber_KeyPress(object sender, KeyPressEventArgs e)
+        private void TxtPhoneNumber_KeyPress(object sender, KeyPressEventArgs e)
         {
             // Allow pasting
-            if (Char.IsControl(e.KeyChar))
+            if (char.IsControl(e.KeyChar))
                 return;
 
             // Only allow numbers, spaces, and +
-            var regex = new Regex(@"[^0-9\s\+]");
+            var regex = MyRegex1();
             if (regex.IsMatch(e.KeyChar.ToString()))
             {
                 e.Handled = true;
             }
         }
 
-        private void txtCountryCode_KeyPress(object sender, KeyPressEventArgs e)
+        private void TxtCountryCode_KeyPress(object sender, KeyPressEventArgs e)
         {
             // Allow pasting
-            if (Char.IsControl(e.KeyChar))
+            if (char.IsControl(e.KeyChar))
                 return;
 
             // Only allow letters
-            var regex = new Regex(@"[^a-zA-Z]");
+            var regex = MyRegex();
             if (regex.IsMatch(e.KeyChar.ToString()))
             {
                 e.Handled = true;
             }
         }
 
-        private void txtCountryCode_Leave(object sender, EventArgs e)
+        private void TxtCountryCode_Leave(object sender, EventArgs e)
         {
             // Always uppercase
             txtCountryCode.Text = txtCountryCode.Text.ToUpper();
         }
 
-        private void btnCancel_Click(object sender, EventArgs e)
+        private void BtnCancel_Click(object sender, EventArgs e)
         {
             this.Canceled = true;
             this.Close();
         }
+
+        [GeneratedRegex(@"[^a-zA-Z]")]
+        private static partial Regex MyRegex();
+        [GeneratedRegex(@"[^0-9\s\+]")]
+        private static partial Regex MyRegex1();
     }
 }

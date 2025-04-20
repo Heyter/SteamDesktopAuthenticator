@@ -5,8 +5,8 @@ namespace Steam_Desktop_Authenticator
 {
     public partial class SettingsForm : Form
     {
-        Manifest manifest;
-        bool fullyLoaded = false;
+        private readonly Manifest manifest;
+        private readonly bool fullyLoaded = false;
 
         public SettingsForm()
         {
@@ -42,7 +42,7 @@ namespace Steam_Desktop_Authenticator
             }
         }
 
-        private void btnSave_Click(object sender, EventArgs e)
+        private void BtnSave_Click(object sender, EventArgs e)
         {
             manifest.PeriodicChecking = chkPeriodicChecking.Checked;
             manifest.PeriodicCheckingInterval = (int)numPeriodicInterval.Value;
@@ -53,18 +53,18 @@ namespace Steam_Desktop_Authenticator
             this.Close();
         }
 
-        private void chkPeriodicChecking_CheckedChanged(object sender, EventArgs e)
+        private void ChkPeriodicChecking_CheckedChanged(object sender, EventArgs e)
         {
             SetControlsEnabledState(chkPeriodicChecking.Checked);
         }
 
-        private void chkConfirmMarket_CheckedChanged(object sender, EventArgs e)
+        private void ChkConfirmMarket_CheckedChanged(object sender, EventArgs e)
         {
             if (chkConfirmMarket.Checked)
                 ShowWarning(chkConfirmMarket);
         }
 
-        private void chkConfirmTrades_CheckedChanged(object sender, EventArgs e)
+        private void ChkConfirmTrades_CheckedChanged(object sender, EventArgs e)
         {
             if (chkConfirmTrades.Checked)
                 ShowWarning(chkConfirmTrades);

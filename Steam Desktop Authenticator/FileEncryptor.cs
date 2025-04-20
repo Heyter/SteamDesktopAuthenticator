@@ -29,7 +29,7 @@ namespace Steam_Desktop_Authenticator
         public static string GetRandomSalt()
         {
             byte[] salt = new byte[SALT_LENGTH];
-            using (RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider())
+            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
             {
                 rng.GetBytes(salt);
             }
@@ -43,7 +43,7 @@ namespace Steam_Desktop_Authenticator
         public static string GetInitializationVector()
         {
             byte[] IV = new byte[IV_LENGTH];
-            using (RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider())
+            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
             {
                 rng.GetBytes(IV);
             }
@@ -62,17 +62,13 @@ namespace Steam_Desktop_Authenticator
         private static byte[] GetEncryptionKey(string password, string salt)
         {
             if (string.IsNullOrEmpty(password))
-            {
                 throw new ArgumentException("Password is empty");
-            }
+
             if (string.IsNullOrEmpty(salt))
-            {
                 throw new ArgumentException("Salt is empty");
-            }
-            using (Rfc2898DeriveBytes pbkdf2 = new Rfc2898DeriveBytes(password, Convert.FromBase64String(salt), PBKDF2_ITERATIONS))
-            {
-                return pbkdf2.GetBytes(KEY_SIZE_BYTES);
-            }
+
+            using var pbkdf2 = new Rfc2898DeriveBytes(password, Convert.FromBase64String(salt), PBKDF2_ITERATIONS);
+            return pbkdf2.GetBytes(KEY_SIZE_BYTES);
         }
 
         /// <summary>
@@ -87,55 +83,45 @@ namespace Steam_Desktop_Authenticator
         public static string DecryptData(string password, string passwordSalt, string IV, string encryptedData)
         {
             if (string.IsNullOrEmpty(password))
-            {
                 throw new ArgumentException("Password is empty");
-            }
+
             if (string.IsNullOrEmpty(passwordSalt))
-            {
                 throw new ArgumentException("Salt is empty");
-            }
+
             if (string.IsNullOrEmpty(IV))
-            {
                 throw new ArgumentException("Initialization Vector is empty");
-            }
+
             if (string.IsNullOrEmpty(encryptedData))
-            {
                 throw new ArgumentException("Encrypted data is empty");
-            }
 
             byte[] cipherText = Convert.FromBase64String(encryptedData);
             byte[] key = GetEncryptionKey(password, passwordSalt);
             string plaintext = null;
 
-            using (RijndaelManaged aes256 = new RijndaelManaged())
+            using (Aes aes = Aes.Create())
             {
-                aes256.IV = Convert.FromBase64String(IV);
-                aes256.Key = key;
-                aes256.Padding = PaddingMode.PKCS7;
-                aes256.Mode = CipherMode.CBC;
+                aes.KeySize = 256;
+                aes.BlockSize = 128;
+                aes.Key = key;
+                aes.IV = Convert.FromBase64String(IV);
+                aes.Padding = PaddingMode.PKCS7;
+                aes.Mode = CipherMode.CBC;
 
-                //create decryptor to perform the stream transform
-                ICryptoTransform decryptor = aes256.CreateDecryptor(aes256.Key, aes256.IV);
-
-                //wrap in a try since a bad password yields a bad key, which would throw an exception on decrypt
                 try
                 {
-                    using (MemoryStream msDecrypt = new MemoryStream(cipherText))
-                    {
-                        using (CryptoStream csDecrypt = new CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read))
-                        {
-                            using (StreamReader srDecrypt = new StreamReader(csDecrypt))
-                            {
-                                plaintext = srDecrypt.ReadToEnd();
-                            }
-                        }
-                    }
+                    using var msDecrypt = new MemoryStream(cipherText);
+                    using var decryptor = aes.CreateDecryptor();
+                    using var csDecrypt = new CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read);
+                    using var srDecrypt = new StreamReader(csDecrypt);
+
+                    plaintext = srDecrypt.ReadToEnd();
                 }
                 catch (CryptographicException)
                 {
                     plaintext = null;
                 }
             }
+
             return plaintext;
         }
 
@@ -170,7 +156,7 @@ namespace Steam_Desktop_Authenticator
             byte[] key = GetEncryptionKey(password, passwordSalt);
             byte[] ciphertext;
 
-            using (RijndaelManaged aes256 = new RijndaelManaged())
+            using (Aes aes256 = Aes.Create())
             {
                 aes256.Key = key;
                 aes256.IV = Convert.FromBase64String(IV);
@@ -179,17 +165,13 @@ namespace Steam_Desktop_Authenticator
 
                 ICryptoTransform encryptor = aes256.CreateEncryptor(aes256.Key, aes256.IV);
 
-                using (MemoryStream msEncrypt = new MemoryStream())
+                using MemoryStream msEncrypt = new();
+                using CryptoStream csEncrypt = new(msEncrypt, encryptor, CryptoStreamMode.Write);
+                using (StreamWriter swEncypt = new(csEncrypt))
                 {
-                    using (CryptoStream csEncrypt = new CryptoStream(msEncrypt, encryptor, CryptoStreamMode.Write))
-                    {
-                        using (StreamWriter swEncypt = new StreamWriter(csEncrypt))
-                        {
-                            swEncypt.Write(plaintext);
-                        }
-                        ciphertext = msEncrypt.ToArray();
-                    }
+                    swEncypt.Write(plaintext);
                 }
+                ciphertext = msEncrypt.ToArray();
             }
             return Convert.ToBase64String(ciphertext);
         }

@@ -7,7 +7,7 @@ namespace Steam_Desktop_Authenticator
 {
     internal class UserFormAuthenticator : IAuthenticator
     {
-        private SteamGuardAccount account;
+        private readonly SteamGuardAccount account;
         private int deviceCodesGenerated = 0;
 
         public UserFormAuthenticator(SteamGuardAccount account)
@@ -56,7 +56,7 @@ namespace Steam_Desktop_Authenticator
                 message = "The code you provided was invalid. Enter the code sent to your email:";
             }
 
-            InputForm emailForm = new InputForm(message);
+            InputForm emailForm = new(message);
             emailForm.ShowDialog();
             return Task.FromResult(emailForm.txtBox.Text);
         }

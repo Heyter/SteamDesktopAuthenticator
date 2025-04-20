@@ -1,11 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Steam_Desktop_Authenticator
@@ -19,7 +13,7 @@ namespace Steam_Desktop_Authenticator
         }
 
         public int SelectedIndex;
-        List<string> Items;
+        private readonly List<string> Items;
 
         private void ListInputForm_Load(object sender, EventArgs e)
         {
@@ -29,7 +23,7 @@ namespace Steam_Desktop_Authenticator
             }
         }
 
-        private void btnAccept_Click(object sender, EventArgs e)
+        private void BtnAccept_Click(object sender, EventArgs e)
         {
             if (lbItems.SelectedIndex != -1)
             {
@@ -38,7 +32,7 @@ namespace Steam_Desktop_Authenticator
             }
         }
 
-        private void btnCancel_Click(object sender, EventArgs e)
+        private void BtnCancel_Click(object sender, EventArgs e)
         {
             this.Close();
         }

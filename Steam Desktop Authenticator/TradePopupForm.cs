@@ -14,7 +14,7 @@ namespace Steam_Desktop_Authenticator
     public partial class TradePopupForm : Form
     {
         private SteamGuardAccount acc;
-        private List<Confirmation> confirms = new List<Confirmation>();
+        private List<Confirmation> confirms = [];
         private bool deny2, accept2;
 
         public TradePopupForm()
@@ -31,7 +31,7 @@ namespace Steam_Desktop_Authenticator
 
         public Confirmation[] Confirmations
         {
-            get { return confirms.ToArray(); }
+            get { return [.. confirms]; }
             set { confirms = new List<Confirmation>(value); }
         }
 
@@ -40,7 +40,7 @@ namespace Steam_Desktop_Authenticator
             this.Location = (Point)Size.Subtract(Screen.GetWorkingArea(this).Size, this.Size);
         }
 
-        private void btnAccept_Click(object sender, EventArgs e)
+        private void BtnAccept_Click(object sender, EventArgs e)
         {
             if (!accept2)
             {
@@ -52,13 +52,13 @@ namespace Steam_Desktop_Authenticator
             else
             {
                 lblStatus.Text = "Accepting...";
-                acc.AcceptConfirmation(confirms[0]);
+                _ = acc.AcceptConfirmation(confirms[0]);
                 confirms.RemoveAt(0);
                 Reset();
             }
         }
 
-        private void btnDeny_Click(object sender, EventArgs e)
+        private void BtnDeny_Click(object sender, EventArgs e)
         {
             if (!deny2)
             {
@@ -69,7 +69,7 @@ namespace Steam_Desktop_Authenticator
             else
             {
                 lblStatus.Text = "Denying...";
-                acc.DenyConfirmation(confirms[0]);
+                _ = acc.DenyConfirmation(confirms[0]);
                 confirms.RemoveAt(0);
                 Reset();
             }
