@@ -8,6 +8,7 @@ namespace Steam_Desktop_Authenticator
     {
         public ListInputForm(List<string> options)
         {
+            this.DoubleBuffered = true;
             Items = options;
             InitializeComponent();
         }
@@ -17,8 +18,9 @@ namespace Steam_Desktop_Authenticator
 
         private void ListInputForm_Load(object sender, EventArgs e)
         {
-            foreach (var item in Items)
+            for (int i = 0; i < Items.Count; i++)
             {
+                string item = Items[i];
                 lbItems.Items.Add(item);
             }
         }

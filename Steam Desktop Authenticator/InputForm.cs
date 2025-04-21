@@ -10,6 +10,7 @@ namespace Steam_Desktop_Authenticator
 
         public InputForm(string label, bool password = false)
         {
+            this.DoubleBuffered = true;
             InitializeComponent();
             this.labelText.Text = label;
 

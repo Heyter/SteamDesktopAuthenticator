@@ -10,6 +10,7 @@ namespace Steam_Desktop_Authenticator
 
         public WelcomeForm()
         {
+            this.DoubleBuffered = true;
             InitializeComponent();
             man = Manifest.GetManifest();
         }
@@ -63,8 +64,10 @@ namespace Steam_Desktop_Authenticator
                 }
 
                 // Copy all files from the old dir to the new one
-                foreach (string newPath in Directory.GetFiles(pathToCopy, "*.*", SearchOption.AllDirectories))
+                string[] array = Directory.GetFiles(pathToCopy, "*.*", SearchOption.AllDirectories);
+                for (int i = 0; i < array.Length; i++)
                 {
+                    string newPath = array[i];
                     File.Copy(newPath, newPath.Replace(pathToCopy, currentPath + "/maFiles"), true);
                 }
 

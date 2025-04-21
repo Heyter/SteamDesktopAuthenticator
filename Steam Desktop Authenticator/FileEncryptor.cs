@@ -67,6 +67,7 @@ namespace Steam_Desktop_Authenticator
             if (string.IsNullOrEmpty(salt))
                 throw new ArgumentException("Salt is empty");
 
+#pragma warning disable SYSLIB0041
             using var pbkdf2 = new Rfc2898DeriveBytes(password, Convert.FromBase64String(salt), PBKDF2_ITERATIONS);
             return pbkdf2.GetBytes(KEY_SIZE_BYTES);
         }
@@ -138,21 +139,17 @@ namespace Steam_Desktop_Authenticator
         public static string EncryptData(string password, string passwordSalt, string IV, string plaintext)
         {
             if (string.IsNullOrEmpty(password))
-            {
                 throw new ArgumentException("Password is empty");
-            }
+
             if (string.IsNullOrEmpty(passwordSalt))
-            {
                 throw new ArgumentException("Salt is empty");
-            }
+
             if (string.IsNullOrEmpty(IV))
-            {
                 throw new ArgumentException("Initialization Vector is empty");
-            }
+
             if (string.IsNullOrEmpty(plaintext))
-            {
                 throw new ArgumentException("Plaintext data is empty");
-            }
+
             byte[] key = GetEncryptionKey(password, passwordSalt);
             byte[] ciphertext;
 

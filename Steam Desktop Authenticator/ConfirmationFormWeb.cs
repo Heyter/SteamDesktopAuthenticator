@@ -4,186 +4,294 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using SteamAuth;
 using System.Drawing.Drawing2D;
-using System.Linq;
 
 namespace Steam_Desktop_Authenticator
 {
     public partial class ConfirmationFormWeb : Form
     {
-        private readonly SteamGuardAccount steamAccount;
+        private readonly SteamGuardAccount _steamAccount;
+        private Panel _confirmationsContainer;
+        private bool _hasResizeEvent;
+        private const int PanelHeight = 120;
+        private const int PanelMargin = 10;
 
         public ConfirmationFormWeb(SteamGuardAccount steamAccount)
         {
             InitializeComponent();
-            this.steamAccount = steamAccount;
-            Text = string.Format("Trade Confirmations - {0}", steamAccount.AccountName);
+            splitContainer1.Panel2.AutoScroll = true;
+            splitContainer1.Panel2.AutoScrollMinSize = new Size(0, 0);
+            splitContainer1.Panel2.Padding = new Padding(5);
+            _steamAccount = steamAccount;
+            Text = $"Trade Confirmations - {steamAccount.AccountName}";
+            DoubleBuffered = true;
         }
-        private async Task LoadData()
-        {
-            splitContainer1.Panel2.Controls.Clear();
 
-            // Check for a valid refresh token first
-            if (steamAccount.Session.IsRefreshTokenExpired())
+        private void UpdateScrollMinSize()
+        {
+            int totalHeight = 0;
+
+            System.Collections.IList list = _confirmationsContainer.Controls;
+            for (int i = 0; i < list.Count; i++)
             {
-                MessageBox.Show("Your session has expired. Use the login again button under the selected account menu.", "Trade Confirmations", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                Close();
-                return;
+                Control control = (Control)list[i];
+                control.Width = _confirmationsContainer.Width;
+                totalHeight += control.Height + control.Margin.Bottom;
             }
 
-            // Check for a valid access token, refresh it if needed
-            if (steamAccount.Session.IsAccessTokenExpired())
+            _confirmationsContainer.Height = totalHeight;
+            splitContainer1.Panel2.AutoScrollMinSize = new Size(0, totalHeight);
+        }
+
+        private async ValueTask LoadData()
+        {
+            try
+            {
+                splitContainer1.Panel2.SuspendLayout();
+                splitContainer1.Panel2.Controls.Clear();
+                splitContainer1.Panel2.AutoScrollMinSize = Size.Empty;
+                splitContainer1.Panel2.AutoScrollPosition = Point.Empty;
+
+                if (await CheckSessionValidity() == false)
+                    return;
+
+                var confirmations = await _steamAccount.FetchConfirmationsAsync();
+                if (confirmations == null || confirmations.Length == 0)
+                {
+                    splitContainer1.Panel2.Controls.Add(new Label
+                    {
+                        Text = "Nothing to confirm/cancel",
+                        AutoSize = true,
+                        ForeColor = Color.Black,
+                        Location = new Point(150, 20)
+                    });
+
+                    return;
+                }
+
+                if (_confirmationsContainer != null)
+                {
+                    splitContainer1.Panel2.Controls.Remove(_confirmationsContainer);
+                    _confirmationsContainer.Dispose();
+                }
+
+                int newWidth = splitContainer1.Panel2.ClientSize.Width - SystemInformation.VerticalScrollBarWidth;
+                _confirmationsContainer = new Panel
+                {
+                    Dock = DockStyle.None,
+                    AutoSize = false,
+                    Width = newWidth,
+                    Height = 0,
+                    AutoScroll = false,
+                    Padding = new Padding(0, 0, 0, PanelMargin)
+                };
+
+                splitContainer1.Panel2.Controls.Add(_confirmationsContainer);
+                splitContainer1.Panel2.AutoScroll = true;
+
+                if (!_hasResizeEvent)
+                {
+                    _hasResizeEvent = true;
+                    splitContainer1.Panel2.Resize += (sender, e) =>
+                    {
+                        _confirmationsContainer.Width = newWidth;
+                        UpdateScrollMinSize();
+                    };
+                }
+
+                await CreateConfirmationPanels(confirmations);
+                UpdateScrollMinSize();
+            }
+            catch (Exception ex)
+            {
+                ShowErrorLabel($"Something went wrong:\n{ex.Message}");
+            }
+            finally
+            {
+                splitContainer1.Panel2.ResumeLayout(true);
+            }
+        }
+
+        private async Task<bool> CheckSessionValidity()
+        {
+            if (_steamAccount.Session.IsRefreshTokenExpired())
+            {
+                var result = MessageBox.Show(
+                    "Your session has expired. Log in again to refresh the session by selecting OK, or use the button in the menu of the selected account.",
+                    "Trade Confirmations",
+                    MessageBoxButtons.OKCancel,
+                    MessageBoxIcon.Error);
+
+                if (result == DialogResult.OK)
+                {
+                    MainForm.PromptRefreshLogin(_steamAccount);
+                    return !_steamAccount.Session.IsRefreshTokenExpired();
+                }
+                Close();
+                return false;
+            }
+
+            if (_steamAccount.Session.IsAccessTokenExpired())
             {
                 try
                 {
-                    await steamAccount.Session.RefreshAccessToken();
+                    await _steamAccount.Session.RefreshAccessToken();
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show(ex.Message, "Steam Login Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     Close();
-                    return;
+                    return false;
                 }
             }
 
-            try
-            {
-                var confirmations = await steamAccount.FetchConfirmationsAsync();
+            return true;
+        }
 
-                if (confirmations == null || confirmations.Length == 0)
+        private Task CreateConfirmationPanels(Confirmation[] confirmations)
+        {
+            if (confirmations.Length > 5)
+            {
+                return Task.Run(() =>
                 {
-                    Label errorLabel = new() { Text = "Nothing to confirm/cancel", AutoSize = true, ForeColor = Color.Black, Location = new Point(150, 20) };
-                    splitContainer1.Panel2.Controls.Add(errorLabel);
-                    return;
+                    Parallel.ForEach(confirmations, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, confirmation =>
+                    {
+                        var panel = CreateConfirmationPanel(confirmation);
+                        _confirmationsContainer.Invoke((MethodInvoker)(() =>
+                        {
+                            _confirmationsContainer.Controls.Add(panel);
+                        }));
+                    });
+                });
+            }
+            else
+            {
+                for (int i = 0; i < confirmations.Length; i++)
+                {
+                    Confirmation confirmation = confirmations[i];
+                    var panel = CreateConfirmationPanel(confirmation);
+                    _confirmationsContainer.Controls.Add(panel);
                 }
 
-                Panel containerPanel = new Panel()
+                return Task.CompletedTask;
+            }
+        }
+
+        private Panel CreateConfirmationPanel(Confirmation confirmation)
+        {
+            var panel = new Panel
+            {
+                Height = PanelHeight,
+                Width = splitContainer1.Panel2.ClientSize.Width - SystemInformation.VerticalScrollBarWidth,
+                Margin = new Padding(0, 0, 0, PanelMargin),
+                Dock = DockStyle.Top
+            };
+
+            panel.Paint += (s, e) =>
+            {
+                using var brush = new LinearGradientBrush(panel.ClientRectangle, Color.Black, Color.DarkCyan, 90F);
+                e.Graphics.FillRectangle(brush, panel.ClientRectangle);
+            };
+
+            if (!string.IsNullOrEmpty(confirmation.Icon))
+            {
+                var pictureBox = new PictureBox
                 {
-                    Dock = DockStyle.Top,
-                    AutoSize = true,
-                    AutoSizeMode = AutoSizeMode.GrowAndShrink
+                    Width = 60,
+                    Height = 60,
+                    Location = new Point(20, 20),
+                    SizeMode = PictureBoxSizeMode.Zoom,
+                    BorderStyle = BorderStyle.None,
+                    WaitOnLoad = false
                 };
 
-                splitContainer1.Panel2.AutoScroll = true;
-                splitContainer1.Panel2.AutoScrollMinSize = new Size(0, confirmations.Length * 130);
-                splitContainer1.Panel2.Resize += (sender, e) =>
-                {
-                    foreach (Panel panel in containerPanel.Controls.OfType<Panel>())
-                    {
-                        panel.Width = splitContainer1.Panel2.Width - SystemInformation.VerticalScrollBarWidth - 5;
-                    }
-                };
+                try { pictureBox.Load(confirmation.Icon); }
+                catch (Exception) { };
 
-                foreach (var confirmation in confirmations)
-                {
-                    Panel panel = new() { Dock = DockStyle.Top, Height = 120, Width = splitContainer1.Panel2.Width - 25 };
-
-                    panel.Paint += (s, e) =>
-                    {
-                        using LinearGradientBrush brush = new(panel.ClientRectangle, Color.Black, Color.DarkCyan, 90F);
-                        e.Graphics.FillRectangle(brush, panel.ClientRectangle);
-                    };
-
-                    if (!string.IsNullOrEmpty(confirmation.Icon))
-                    {
-                        PictureBox pictureBox = new() { Width = 60, Height = 60, Location = new Point(20, 20), SizeMode = PictureBoxSizeMode.Zoom };
-                        try
-                        {
-                            pictureBox.Load(confirmation.Icon);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine("Failed to load avatar: " + ex.Message);
-                        }
-                        panel.Controls.Add(pictureBox);
-                    }
-
-                    Label nameLabel = new()
-                    {
-                        Text = $"{confirmation.Headline}\n{confirmation.Creator.ToString()}",
-                        AutoSize = true,
-                        ForeColor = Color.Snow,
-                        Location = new Point(90, 20),
-                        BackColor = Color.Transparent
-                    };
-                    panel.Controls.Add(nameLabel);
-
-                    ConfirmationButton acceptButton = new()
-                    {
-                        Text = confirmation.Accept,
-                        Location = new Point(90, 50),
-                        FlatStyle = FlatStyle.Flat,
-                        FlatAppearance = { BorderSize = 0 },
-                        BackColor = Color.Black,
-                        ForeColor = Color.Snow,
-                        Confirmation = confirmation,
-                        ParentPanel = panel
-                    };
-                    acceptButton.Click += BtnAccept_Click;
-                    panel.Controls.Add(acceptButton);
-
-                    ConfirmationButton cancelButton = new()
-                    {
-                        Text = confirmation.Cancel,
-                        Location = new Point(180, 50),
-                        FlatStyle = FlatStyle.Flat,
-                        FlatAppearance = { BorderSize = 0 },
-                        BackColor = Color.Black,
-                        ForeColor = Color.Snow,
-                        Confirmation = confirmation,
-                        ParentPanel = panel
-                    };
-                    cancelButton.Click += BtnCancel_Click;
-                    panel.Controls.Add(cancelButton);
-
-                    Label summaryLabel = new()
-                    {
-                        Text = string.Join("\n", confirmation.Summary),
-                        AutoSize = true,
-                        ForeColor = Color.Snow,
-                        Location = new Point(90, 80),
-                        BackColor = Color.Transparent
-                    };
-                    panel.Controls.Add(summaryLabel);
-
-                    containerPanel.Controls.Add(panel);
-                }
-
-                splitContainer1.Panel2.Controls.Add(containerPanel);
+                panel.Controls.Add(pictureBox);
             }
-            catch (Exception ex)
+
+            AddLabelsAndButtons(panel, confirmation);
+            return panel;
+        }
+
+        private void AddLabelsAndButtons(Panel panel, Confirmation confirmation)
+        {
+            panel.Controls.Add(new Label
             {
-                Label errorLabel = new() { Text = "Something went wrong:\n" + ex.Message, AutoSize = true, ForeColor = Color.Red, Location = new Point(20, 20) };
-                splitContainer1.Panel2.Controls.Add(errorLabel);
-            }
+                Text = $"{confirmation.Headline}\n{confirmation.Creator}",
+                AutoSize = true,
+                ForeColor = Color.Snow,
+                Location = new Point(90, 20),
+                BackColor = Color.Transparent
+            });
+
+            var acceptButton = new ConfirmationButton
+            {
+                Text = confirmation.Accept,
+                Location = new Point(90, 50),
+                FlatStyle = FlatStyle.Flat,
+                FlatAppearance = { BorderSize = 0 },
+                BackColor = Color.Black,
+                ForeColor = Color.Snow,
+                Confirmation = confirmation,
+                ParentPanel = panel
+            };
+            acceptButton.Click += BtnAccept_Click;
+            panel.Controls.Add(acceptButton);
+
+            var cancelButton = new ConfirmationButton
+            {
+                Text = confirmation.Cancel,
+                Location = new Point(180, 50),
+                FlatStyle = FlatStyle.Flat,
+                FlatAppearance = { BorderSize = 0 },
+                BackColor = Color.Black,
+                ForeColor = Color.Snow,
+                Confirmation = confirmation,
+                ParentPanel = panel
+            };
+            cancelButton.Click += BtnCancel_Click;
+            panel.Controls.Add(cancelButton);
+
+            panel.Controls.Add(new Label
+            {
+                Text = string.Join("\n", confirmation.Summary),
+                AutoSize = true,
+                ForeColor = Color.Snow,
+                Location = new Point(90, 80),
+                BackColor = Color.Transparent
+            });
+        }
+
+        private void ShowErrorLabel(string message)
+        {
+            splitContainer1.Panel2.Controls.Add(new Label
+            {
+                Text = message,
+                AutoSize = true,
+                ForeColor = Color.Red,
+                Location = new Point(20, 20)
+            });
         }
 
         private async void BtnAccept_Click(object sender, EventArgs e)
         {
-            var button = (ConfirmationButton)sender;
-            var confirmation = button.Confirmation;
-            bool result = await steamAccount.AcceptConfirmation(confirmation);
-
-            if (result)
-            {
-                button.ParentPanel.Dispose();
-                splitContainer1.Panel2.PerformLayout();
-            }
-            else
-            {
-                await LoadData();
-            }
+            await ProcessConfirmationAction((ConfirmationButton)sender, _steamAccount.AcceptConfirmation);
         }
 
         private async void BtnCancel_Click(object sender, EventArgs e)
         {
-            var button = (ConfirmationButton)sender;
-            var confirmation = button.Confirmation;
-            bool result = await steamAccount.DenyConfirmation(confirmation);
+            await ProcessConfirmationAction((ConfirmationButton)sender, _steamAccount.DenyConfirmation);
+        }
+
+        private async Task ProcessConfirmationAction(ConfirmationButton button, Func<Confirmation, Task<bool>> action)
+        {
+            bool result = await action(button.Confirmation);
 
             if (result)
             {
                 button.ParentPanel.Dispose();
-                splitContainer1.Panel2.PerformLayout();
+                UpdateScrollMinSize();
             }
             else
             {
@@ -191,25 +299,21 @@ namespace Steam_Desktop_Authenticator
             }
         }
 
-
         private async void BtnRefresh_Click(object sender, EventArgs e)
         {
-            btnRefresh.Enabled = false;
-            btnRefresh.Text = "Refreshing...";
-
-            await LoadData();
-
-            btnRefresh.Enabled = true;
-            btnRefresh.Text = "Refresh";
+            await RefreshDataWithButtonState();
         }
 
         private async void ConfirmationFormWeb_Shown(object sender, EventArgs e)
         {
+            await RefreshDataWithButtonState();
+        }
+
+        private async Task RefreshDataWithButtonState()
+        {
             btnRefresh.Enabled = false;
             btnRefresh.Text = "Refreshing...";
-
             await LoadData();
-
             btnRefresh.Enabled = true;
             btnRefresh.Text = "Refresh";
         }

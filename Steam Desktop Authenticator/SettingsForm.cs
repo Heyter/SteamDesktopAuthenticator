@@ -10,6 +10,7 @@ namespace Steam_Desktop_Authenticator
 
         public SettingsForm()
         {
+            this.DoubleBuffered = true;
             InitializeComponent();
 
             // Get latest manifest

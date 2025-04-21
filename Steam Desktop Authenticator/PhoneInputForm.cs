@@ -14,6 +14,7 @@ namespace Steam_Desktop_Authenticator
 
         public PhoneInputForm(SteamGuardAccount account)
         {
+            this.DoubleBuffered = true;
             this.Account = account;
             InitializeComponent();
         }

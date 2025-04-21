@@ -17,8 +17,9 @@ namespace Steam_Desktop_Authenticator
             {
                 Process curr = Process.GetCurrentProcess();
                 Process[] procs = Process.GetProcessesByName(curr.ProcessName);
-                foreach (Process p in procs)
+                for (int i = 0; i < procs.Length; i++)
                 {
+                    Process p = procs[i];
                     if ((p.Id != curr.Id) &&
                         (p.MainModule.FileName == curr.MainModule.FileName))
                         return p;
@@ -46,9 +47,10 @@ namespace Steam_Desktop_Authenticator
 
             // Parse command line arguments
             CommandLineOptions options = new();
-            Parser.Default.ParseArguments<CommandLineOptions>(args)
+            _ = Parser.Default.ParseArguments<CommandLineOptions>(args)
                 .WithParsed(o => options = o);
 
+            Application.SetHighDpiMode(HighDpiMode.SystemAware);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 

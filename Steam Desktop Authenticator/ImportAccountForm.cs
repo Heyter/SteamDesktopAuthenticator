@@ -13,6 +13,7 @@ namespace Steam_Desktop_Authenticator
 
         public ImportAccountForm()
         {
+            this.DoubleBuffered = true;
             InitializeComponent();
             this.mManifest = Manifest.GetManifest();
         }
@@ -139,24 +140,19 @@ namespace Steam_Desktop_Authenticator
 
                             // extract fileName
                             string ImportFileName = fullPath.Replace(path, "");
-
                             string ImportManifestFile = path + "manifest.json";
-
 
                             if (File.Exists(ImportManifestFile))
                             {
                                 string ImportManifestContents = File.ReadAllText(ImportManifestFile);
 
-
                                 try
                                 {
                                     ImportManifest account = JsonConvert.DeserializeObject<ImportManifest>(ImportManifestContents);
-                                    //bool Import_encrypted = account.Encrypted;
 
-                                    List<ImportManifest> newEntries = [];
-
-                                    foreach (var entry in account.Entries)
+                                    for (int i = 0; i < account.Entries.Count; i++)
                                     {
+                                        ImportManifestEntry entry = account.Entries[i];
                                         string FileName = entry.Filename;
                                         string encryption_iv = entry.IV;
                                         string encryption_salt = entry.Salt;
@@ -174,7 +170,6 @@ namespace Steam_Desktop_Authenticator
                                     ReadManifestEx = "1";
                                     MessageBox.Show("Invalid content inside manifest.json!\nImport Failed.");
                                 }
-
 
                                 // DECRIPT & Import
                                 //--------------------

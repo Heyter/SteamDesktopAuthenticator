@@ -110,8 +110,9 @@ namespace Steam_Desktop_Authenticator
                     DirectoryInfo dir = new(maDir);
                     var files = dir.GetFiles();
 
-                    foreach (var file in files)
+                    for (int i = 0; i < files.Length; i++)
                     {
+                        FileInfo file = files[i];
                         if (file.Extension != ".maFile") continue;
 
                         string contents = File.ReadAllText(file.FullName);
@@ -226,8 +227,9 @@ namespace Steam_Desktop_Authenticator
             string maDir = Manifest.GetExecutableDir() + "/maFiles/";
 
             List<SteamGuardAccount> accounts = [];
-            foreach (var entry in this.Entries)
+            for (int i = 0; i < Entries.Count; i++)
             {
+                ManifestEntry entry = this.Entries[i];
                 string fileText = File.ReadAllText(maDir + entry.Filename);
                 if (this.Encrypted)
                 {
@@ -429,8 +431,9 @@ namespace Steam_Desktop_Authenticator
             List<ManifestEntry> newEntries = [];
             string maDir = Manifest.GetExecutableDir() + "/maFiles/";
 
-            foreach (var entry in this.Entries)
+            for (int i = 0; i < Entries.Count; i++)
             {
+                ManifestEntry entry = this.Entries[i];
                 string filename = maDir + entry.Filename;
                 if (File.Exists(filename))
                 {

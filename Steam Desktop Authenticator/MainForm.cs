@@ -6,88 +6,75 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Drawing;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace Steam_Desktop_Authenticator
 {
     public partial class MainForm : Form
     {
-        private SteamGuardAccount currentAccount = null;
-        private SteamGuardAccount[] allAccounts;
-        private Manifest manifest;
-        private static readonly SemaphoreSlim confirmationsSemaphore = new(1, 1);
+        private SteamGuardAccount _currentAccount;
+        private SteamGuardAccount[] _allAccounts;
+        private Manifest _manifest;
+        private static readonly SemaphoreSlim _confirmationsSemaphore = new(1, 1);
 
-        private long steamTime = 0;
-        private long currentSteamChunk = 0;
-        private string passKey = null;
-        private bool startSilent = false;
-
-        // Forms
-        private readonly TradePopupForm popupFrm = new();
+        private long _steamTime;
+        private long _currentSteamChunk;
+        private string _passKey;
+        private bool _startSilent;
+        private readonly TradePopupForm _popupFrm = new();
 
         public MainForm()
         {
             InitializeComponent();
+            DoubleBuffered = true;
         }
 
-        public void SetEncryptionKey(string key)
-        {
-            passKey = key;
-        }
-
-        public void StartSilent(bool silent)
-        {
-            startSilent = silent;
-        }
+        public void SetEncryptionKey(string key) => _passKey = key;
+        public void StartSilent(bool silent) => _startSilent = silent;
 
         // Form event handlers
-
-        private void MainForm_Shown(object sender, EventArgs e)
+        private async void MainForm_Shown(object sender, EventArgs e)
         {
-            labelVersion.Text = string.Format("v{0}", Application.ProductVersion);
+            labelVersion.Text = $"v{Application.ProductVersion}";
+
             try
             {
-                this.manifest = Manifest.GetManifest();
+                _manifest = Manifest.GetManifest();
             }
             catch (ManifestParseException)
             {
-                MessageBox.Show("Unable to read your settings. Try restating SDA.", "Steam Desktop Authenticator", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                this.Close();
+                MessageBox.Show("Unable to read your settings. Try restating SDA.",
+                    "Steam Desktop Authenticator",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                Close();
+                return;
             }
 
-            // Make sure we don't show that welcome dialog again
-            this.manifest.FirstRun = false;
-            this.manifest.Save();
+            _manifest.FirstRun = false;
+            _manifest.Save();
 
-            // Tick first time manually to sync time
-            TimerSteamGuard_Tick(new object(), EventArgs.Empty);
+            await TimerSteamGuard_TickAsync();
 
-            if (manifest.Encrypted)
+            if (_manifest.Encrypted)
             {
-                if (passKey == null)
+                if (_passKey == null)
                 {
-                    passKey = manifest.PromptForPassKey();
-                    if (passKey == null)
-                    {
+                    _passKey = _manifest.PromptForPassKey();
+                    if (_passKey == null)
                         Application.Exit();
-                    }
                 }
 
                 btnManageEncryption.Text = "Manage Encryption";
             }
             else
-            {
                 btnManageEncryption.Text = "Setup Encryption";
-            }
 
-            btnManageEncryption.Enabled = manifest.Entries.Count > 0;
-
+            btnManageEncryption.Enabled = _manifest.Entries.Count > 0;
             LoadSettings();
             LoadAccountsList();
 
-            if (startSilent)
-            {
-                this.WindowState = FormWindowState.Minimized;
-            }
+            if (_startSilent) WindowState = FormWindowState.Minimized;
         }
 
         private void MainForm_Load(object sender, EventArgs e)
@@ -114,27 +101,27 @@ namespace Steam_Desktop_Authenticator
         private void BtnSteamLogin_Click(object sender, EventArgs e)
         {
             var loginForm = new LoginForm();
-            loginForm.ShowDialog();
+            _ = loginForm.ShowDialog();
             this.LoadAccountsList();
         }
 
         private void BtnTradeConfirmations_Click(object sender, EventArgs e)
         {
-            if (currentAccount == null) return;
+            if (_currentAccount == null) return;
 
             string oText = btnTradeConfirmations.Text;
             btnTradeConfirmations.Text = "Loading...";
             btnTradeConfirmations.Text = oText;
 
-            ConfirmationFormWeb confirms = new(currentAccount);
+            ConfirmationFormWeb confirms = new(_currentAccount);
             confirms.Show();
         }
 
         private void BtnManageEncryption_Click(object sender, EventArgs e)
         {
-            if (manifest.Encrypted)
+            if (_manifest.Encrypted)
             {
-                InputForm currentPassKeyForm = new("Enter current passkey", true);
+                using InputForm currentPassKeyForm = new("Enter current passkey", true);
                 currentPassKeyForm.ShowDialog();
 
                 if (currentPassKeyForm.Canceled)
@@ -144,7 +131,7 @@ namespace Steam_Desktop_Authenticator
 
                 string curPassKey = currentPassKeyForm.txtBox.Text;
 
-                InputForm changePassKeyForm = new("Enter new passkey, or leave blank to remove encryption.");
+                using InputForm changePassKeyForm = new("Enter new passkey, or leave blank to remove encryption.");
                 changePassKeyForm.ShowDialog();
 
                 if (changePassKeyForm.Canceled && !string.IsNullOrEmpty(changePassKeyForm.txtBox.Text))
@@ -152,7 +139,7 @@ namespace Steam_Desktop_Authenticator
                     return;
                 }
 
-                InputForm changePassKeyForm2 = new("Confirm new passkey, or leave blank to remove encryption.");
+                using InputForm changePassKeyForm2 = new("Confirm new passkey, or leave blank to remove encryption.");
                 changePassKeyForm2.ShowDialog();
 
                 if (changePassKeyForm2.Canceled && !string.IsNullOrEmpty(changePassKeyForm.txtBox.Text))
@@ -161,21 +148,17 @@ namespace Steam_Desktop_Authenticator
                 }
 
                 string newPassKey = changePassKeyForm.txtBox.Text;
-                string confirmPassKey = changePassKeyForm2.txtBox.Text;
 
-                if (newPassKey != confirmPassKey)
+                if (newPassKey != changePassKeyForm2.txtBox.Text)
                 {
                     MessageBox.Show("Passkeys do not match.");
                     return;
                 }
 
-                if (newPassKey.Length == 0)
-                {
-                    newPassKey = null;
-                }
-
+                if (newPassKey.Length == 0) newPassKey = null;
                 string action = newPassKey == null ? "remove" : "change";
-                if (!manifest.ChangeEncryptionKey(curPassKey, newPassKey))
+
+                if (!_manifest.ChangeEncryptionKey(curPassKey, newPassKey))
                 {
                     MessageBox.Show("Unable to " + action + " passkey.");
                 }
@@ -187,7 +170,7 @@ namespace Steam_Desktop_Authenticator
             }
             else
             {
-                passKey = manifest.PromptSetupPassKey();
+                _passKey = _manifest.PromptSetupPassKey();
                 this.LoadAccountsList();
             }
         }
@@ -196,7 +179,6 @@ namespace Steam_Desktop_Authenticator
         {
             CopyLoginToken();
         }
-
 
         // Tool strip menu handlers
 
@@ -207,7 +189,7 @@ namespace Steam_Desktop_Authenticator
 
         private void MenuRemoveAccountFromManifest_Click(object sender, EventArgs e)
         {
-            if (manifest.Encrypted)
+            if (_manifest.Encrypted)
             {
                 MessageBox.Show("You cannot remove accounts from the manifest file while it is encrypted.", "Remove from manifest", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -216,7 +198,7 @@ namespace Steam_Desktop_Authenticator
                 DialogResult res = MessageBox.Show("This will remove the selected account from the manifest file.\nUse this to move a maFile to another computer.\nThis will NOT delete your maFile.", "Remove from manifest", MessageBoxButtons.OKCancel);
                 if (res == DialogResult.OK)
                 {
-                    manifest.RemoveAccount(currentAccount, false);
+                    _manifest.RemoveAccount(_currentAccount, false);
                     MessageBox.Show("Account removed from manifest.\nYou can now move its maFile to another computer and import it using the File menu.", "Remove from manifest");
                     LoadAccountsList();
                 }
@@ -225,7 +207,7 @@ namespace Steam_Desktop_Authenticator
 
         private void MenuLoginAgain_Click(object sender, EventArgs e)
         {
-            PromptRefreshLogin(currentAccount);
+            PromptRefreshLogin(_currentAccount);
         }
 
         private void MenuImportAccount_Click(object sender, EventArgs e)
@@ -238,27 +220,27 @@ namespace Steam_Desktop_Authenticator
         private void MenuSettings_Click(object sender, EventArgs e)
         {
             new SettingsForm().ShowDialog();
-            manifest = Manifest.GetManifest(true);
+            _manifest = Manifest.GetManifest(true);
             LoadSettings();
         }
 
         private async void MenuDeactivateAuthenticator_Click(object sender, EventArgs e)
         {
-            if (currentAccount == null) return;
+            if (_currentAccount == null) return;
 
             // Check for a valid refresh token first
-            if (currentAccount.Session.IsRefreshTokenExpired())
+            if (_currentAccount.Session.IsRefreshTokenExpired())
             {
                 MessageBox.Show("Your session has expired. Use the login again button under the selected account menu.", "Deactivate Authenticator", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
             // Check for a valid access token, refresh it if needed
-            if (currentAccount.Session.IsAccessTokenExpired())
+            if (_currentAccount.Session.IsAccessTokenExpired())
             {
                 try
                 {
-                    await currentAccount.Session.RefreshAccessToken();
+                    await _currentAccount.Session.RefreshAccessToken();
                 }
                 catch (Exception ex)
                 {
@@ -267,7 +249,7 @@ namespace Steam_Desktop_Authenticator
                 }
             }
 
-            DialogResult res = MessageBox.Show("Would you like to remove Steam Guard completely?\nYes - Remove Steam Guard completely.\nNo - Switch back to Email authentication.", "Deactivate Authenticator: " + currentAccount.AccountName, MessageBoxButtons.YesNoCancel);
+            DialogResult res = MessageBox.Show("Would you like to remove Steam Guard completely?\nYes - Remove Steam Guard completely.\nNo - Switch back to Email authentication.", "Deactivate Authenticator: " + _currentAccount.AccountName, MessageBoxButtons.YesNoCancel);
             int scheme = 0;
             if (res == DialogResult.Yes)
             {
@@ -284,8 +266,8 @@ namespace Steam_Desktop_Authenticator
 
             if (scheme != 0)
             {
-                string confCode = currentAccount.GenerateSteamGuardCode();
-                InputForm confirmationDialog = new(string.Format("Removing Steam Guard from {0}. Enter this confirmation code: {1}", currentAccount.AccountName, confCode));
+                string confCode = _currentAccount.GenerateSteamGuardCode();
+                InputForm confirmationDialog = new(string.Format("Removing Steam Guard from {0}. Enter this confirmation code: {1}", _currentAccount.AccountName, confCode));
                 confirmationDialog.ShowDialog();
 
                 if (confirmationDialog.Canceled)
@@ -300,11 +282,11 @@ namespace Steam_Desktop_Authenticator
                     return;
                 }
 
-                bool success = await currentAccount.DeactivateAuthenticator(scheme);
+                bool success = await _currentAccount.DeactivateAuthenticator(scheme);
                 if (success)
                 {
                     MessageBox.Show(string.Format("Steam Guard {0}. maFile will be deleted after hitting okay. If you need to make a backup, now's the time.", (scheme == 2 ? "removed completely" : "switched to emails")));
-                    manifest.RemoveAccount(currentAccount);
+                    _manifest.RemoveAccount(_currentAccount);
                     LoadAccountsList();
                 }
                 else
@@ -357,17 +339,16 @@ namespace Steam_Desktop_Authenticator
         // Misc UI handlers
         private void ListAccounts_SelectedValueChanged(object sender, EventArgs e)
         {
-            for (int i = 0; i < allAccounts.Length; i++)
-            {
-                // Check if index is out of bounds first
-                if (i < 0 || listAccounts.SelectedIndex < 0)
-                    continue;
+            if (listAccounts.SelectedIndex < 0) return;
+            var accountName = listAccounts.Items[listAccounts.SelectedIndex] as string;
 
-                SteamGuardAccount account = allAccounts[i];
-                if (account.AccountName == (string)listAccounts.Items[listAccounts.SelectedIndex])
+            for (int i = 0; i < _allAccounts.Length; i++)
+            {
+                SteamGuardAccount account = _allAccounts[i];
+                if (account.AccountName == accountName)
                 {
                     trayAccountList.Text = account.AccountName;
-                    currentAccount = account;
+                    _currentAccount = account;
                     LoadAccountInfo();
                     break;
                 }
@@ -388,111 +369,148 @@ namespace Steam_Desktop_Authenticator
 
 
         // Timers
+        private async Task TimerSteamGuard_TickAsync()
+        {
+            lblStatus.Text = "Aligning time with Steam...";
+            _steamTime = await TimeAligner.GetSteamTimeAsync().ConfigureAwait(false);
+            lblStatus.Text = string.Empty;
+
+            _currentSteamChunk = _steamTime / 30L;
+            LoadAccountInfo();
+
+            if (_currentAccount != null)
+            {
+                pbTimeout.Value = 30 - (int)(_steamTime - (_currentSteamChunk * 30L));
+            }
+        }
 
         private async void TimerSteamGuard_Tick(object sender, EventArgs e)
         {
-            lblStatus.Text = "Aligning time with Steam...";
-            steamTime = await TimeAligner.GetSteamTimeAsync();
-            lblStatus.Text = "";
-
-            currentSteamChunk = steamTime / 30L;
-            int secondsUntilChange = (int)(steamTime - (currentSteamChunk * 30L));
-
-            LoadAccountInfo();
-            if (currentAccount != null)
+            try
             {
-                pbTimeout.Value = 30 - secondsUntilChange;
+                timerSteamGuard.Enabled = false;
+                await TimerSteamGuard_TickAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                timerSteamGuard.Enabled = true;
             }
         }
 
         private async void TimerTradesPopup_Tick(object sender, EventArgs e)
         {
-            if (currentAccount == null || popupFrm.Visible) return;
-            if (!confirmationsSemaphore.Wait(0))
+            try
             {
-                return; //Only one thread may access this critical section at once. Mutex is a bad choice here because it'll cause a pileup of threads.
+                timerTradesPopup.Enabled = false;
+                await TimerTradesPopup_TickAsync().ConfigureAwait(false);
             }
+            finally
+            {
+                timerTradesPopup.Enabled = true;
+            }
+        }
 
-            List<Confirmation> confs = [];
-            Dictionary<SteamGuardAccount, List<Confirmation>> autoAcceptConfirmations = [];
-
-            SteamGuardAccount[] accs =
-                manifest.CheckAllAccounts ? allAccounts : [currentAccount];
+        private async Task TimerTradesPopup_TickAsync()
+        {
+            if (_currentAccount == null || _popupFrm.Visible) return;
+            if (!await _confirmationsSemaphore.WaitAsync(0).ConfigureAwait(false)) return;
 
             try
             {
                 lblStatus.Text = "Checking confirmations...";
 
-                foreach (var acc in accs)
+                var accounts = _manifest.CheckAllAccounts ? _allAccounts : [_currentAccount];
+                var (Confirmations, AutoAcceptConfirmations) = await ProcessAccountsConfirmationsAsync(accounts);
+
+                if (Confirmations.Count > 0)
                 {
-                    // Check for a valid refresh token first
-                    if (acc.Session.IsRefreshTokenExpired())
-                    {
-                        MessageBox.Show("Your session for account " + acc.AccountName + " has expired. You will be prompted to login again.", "Trade Confirmations", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        PromptRefreshLogin(acc);
-                        break;
-                    }
+                    _popupFrm.Confirmations = [.. Confirmations];
+                    _popupFrm.Popup();
+                }
 
-                    // Check for a valid access token, refresh it if needed
-                    if (acc.Session.IsAccessTokenExpired())
-                    {
-                        try
-                        {
-                            lblStatus.Text = "Refreshing session...";
-                            await acc.Session.RefreshAccessToken();
-                            lblStatus.Text = "Checking confirmations...";
-                        }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show(ex.Message, "Steam Login Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            break;
-                        }
-                    }
+                await ProcessAutoAcceptConfirmations(AutoAcceptConfirmations).ConfigureAwait(false);
+            }
+            finally
+            {
+                lblStatus.Text = string.Empty;
+                _confirmationsSemaphore.Release();
+            }
+        }
 
+        private async Task<(List<Confirmation> Confirmations,
+            Dictionary<SteamGuardAccount, List<Confirmation>> AutoAcceptConfirmations)>
+            ProcessAccountsConfirmationsAsync(SteamGuardAccount[] accounts)
+        {
+            var confirmations = new List<Confirmation>();
+            var autoAcceptConfirmations = new Dictionary<SteamGuardAccount, List<Confirmation>>();
+
+            foreach (var acc in accounts)
+            {
+                if (acc.Session.IsRefreshTokenExpired())
+                {
+                    MessageBox.Show($"Your session for account {acc.AccountName} has expired.",
+                        "Trade Confirmations",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                    PromptRefreshLogin(acc);
+                    continue;
+                }
+
+                if (acc.Session.IsAccessTokenExpired())
+                {
                     try
                     {
-                        Confirmation[] tmp = await acc.FetchConfirmationsAsync();
-                        foreach (var conf in tmp)
-                        {
-                            if ((conf.ConfType == Confirmation.EMobileConfirmationType.MarketListing && manifest.AutoConfirmMarketTransactions) ||
-                                (conf.ConfType == Confirmation.EMobileConfirmationType.Trade && manifest.AutoConfirmTrades))
-                            {
-                                if (!autoAcceptConfirmations.ContainsKey(acc))
-                                    autoAcceptConfirmations[acc] = [];
-                                autoAcceptConfirmations[acc].Add(conf);
-                            }
-                            else
-                                confs.Add(conf);
-                        }
+                        lblStatus.Text = "Refreshing session...";
+                        await acc.Session.RefreshAccessToken().ConfigureAwait(false);
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-
+                        MessageBox.Show(ex.Message, "Steam Login Error",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        continue;
                     }
                 }
 
-                lblStatus.Text = "";
-
-                if (confs.Count > 0)
+                try
                 {
-                    popupFrm.Confirmations = [.. confs];
-                    popupFrm.Popup();
+                    var fetchedConfirmations = await acc.FetchConfirmationsAsync().ConfigureAwait(false);
+                    ProcessFetchedConfirmations(acc, fetchedConfirmations, confirmations, autoAcceptConfirmations);
                 }
-                if (autoAcceptConfirmations.Count > 0)
-                {
-                    foreach (var acc in autoAcceptConfirmations.Keys)
-                    {
-                        var confirmations = autoAcceptConfirmations[acc].ToArray();
-                        await acc.AcceptMultipleConfirmations(confirmations);
-                    }
-                }
+                catch { }
             }
-            catch (SteamGuardAccount.WGTokenInvalidException)
+
+            return (confirmations, autoAcceptConfirmations);
+        }
+
+        private void ProcessFetchedConfirmations(
+            SteamGuardAccount account,
+            Confirmation[] confirmations,
+            List<Confirmation> normalConfirmations,
+            Dictionary<SteamGuardAccount, List<Confirmation>> autoAcceptConfirmations)
+        {
+            foreach (var conf in confirmations)
             {
-                lblStatus.Text = "";
+                if ((conf.ConfType == Confirmation.EMobileConfirmationType.MarketListing && _manifest.AutoConfirmMarketTransactions) ||
+                    (conf.ConfType == Confirmation.EMobileConfirmationType.Trade && _manifest.AutoConfirmTrades))
+                {
+                    if (!autoAcceptConfirmations.ContainsKey(account))
+                        autoAcceptConfirmations[account] = [];
+                    autoAcceptConfirmations[account].Add(conf);
+                }
+                else
+                {
+                    normalConfirmations.Add(conf);
+                }
             }
+        }
 
-            confirmationsSemaphore.Release();
+        private static async Task ProcessAutoAcceptConfirmations(
+            Dictionary<SteamGuardAccount, List<Confirmation>> autoAcceptConfirmations)
+        {
+            foreach (var (account, confirmations) in autoAcceptConfirmations)
+            {
+                await account.AcceptMultipleConfirmations([.. confirmations]).ConfigureAwait(false);
+            }
         }
 
         // Other methods
@@ -509,10 +527,10 @@ namespace Steam_Desktop_Authenticator
         /// Display a login form to the user to refresh their OAuth Token
         /// </summary>
         /// <param name="account">The account to refresh</param>
-        private static void PromptRefreshLogin(SteamGuardAccount account)
+        public static void PromptRefreshLogin(SteamGuardAccount account)
         {
             var loginForm = new LoginForm(LoginForm.LoginType.Refresh, account);
-            loginForm.ShowDialog();
+            _ = loginForm.ShowDialog();
         }
 
         /// <summary>
@@ -520,11 +538,11 @@ namespace Steam_Desktop_Authenticator
         /// </summary>
         private void LoadAccountInfo()
         {
-            if (currentAccount != null && steamTime != 0)
+            if (_currentAccount != null && _steamTime != 0)
             {
-                popupFrm.Account = currentAccount;
-                txtLoginToken.Text = currentAccount.GenerateSteamGuardCodeForTime(steamTime);
-                groupAccount.Text = "Account: " + currentAccount.AccountName;
+                _popupFrm.Account = _currentAccount;
+                txtLoginToken.Text = _currentAccount.GenerateSteamGuardCodeForTime(_steamTime);
+                groupAccount.Text = "Account: " + _currentAccount.AccountName;
             }
         }
 
@@ -533,32 +551,21 @@ namespace Steam_Desktop_Authenticator
         /// </summary>
         private void LoadAccountsList()
         {
-            currentAccount = null;
-
+            _currentAccount = null;
             listAccounts.Items.Clear();
-            listAccounts.SelectedIndex = -1;
-
             trayAccountList.Items.Clear();
-            trayAccountList.SelectedIndex = -1;
 
-            allAccounts = manifest.GetAllAccounts(passKey);
+            _allAccounts = _manifest.GetAllAccounts(_passKey);
+            if (_allAccounts.Length == 0) return;
 
-            if (allAccounts.Length > 0)
-            {
-                for (int i = 0; i < allAccounts.Length; i++)
-                {
-                    SteamGuardAccount account = allAccounts[i];
-                    listAccounts.Items.Add(account.AccountName);
-                    trayAccountList.Items.Add(account.AccountName);
-                }
+            var accountNames = _allAccounts.Select(static a => a.AccountName).ToArray();
+            listAccounts.Items.AddRange(accountNames);
+            trayAccountList.Items.AddRange(accountNames);
 
-                listAccounts.SelectedIndex = 0;
-                trayAccountList.SelectedIndex = 0;
+            listAccounts.SelectedIndex = trayAccountList.SelectedIndex = 0;
+            listAccounts.Sorted = trayAccountList.Sorted = true;
 
-                listAccounts.Sorted = true;
-                trayAccountList.Sorted = true;
-            }
-            menuDeactivateAuthenticator.Enabled = btnTradeConfirmations.Enabled = allAccounts.Length > 0;
+            menuDeactivateAuthenticator.Enabled = btnTradeConfirmations.Enabled = true;
         }
 
         private void ListAccounts_KeyDown(object sender, KeyEventArgs e)
@@ -568,7 +575,7 @@ namespace Steam_Desktop_Authenticator
                 if (e.KeyCode == Keys.Up || e.KeyCode == Keys.Down)
                 {
                     int to = listAccounts.SelectedIndex - (e.KeyCode == Keys.Up ? 1 : -1);
-                    manifest.MoveEntry(listAccounts.SelectedIndex, to);
+                    _manifest.MoveEntry(listAccounts.SelectedIndex, to);
                     LoadAccountsList();
                 }
                 return;
@@ -616,18 +623,18 @@ namespace Steam_Desktop_Authenticator
 
         private string[] GetAllNames()
         {
-            string[] itemArray = new string[allAccounts.Length];
+            var itemArray = new string[_allAccounts.Length];
             for (int i = 0; i < itemArray.Length; i++)
             {
-                itemArray[i] = allAccounts[i].AccountName;
+                itemArray[i] = _allAccounts[i].AccountName;
             }
             return itemArray;
         }
 
         private void LoadSettings()
         {
-            timerTradesPopup.Enabled = manifest.PeriodicChecking;
-            timerTradesPopup.Interval = manifest.PeriodicCheckingInterval * 1000;
+            timerTradesPopup.Enabled = _manifest.PeriodicChecking;
+            timerTradesPopup.Interval = _manifest.PeriodicCheckingInterval * 1000;
         }
 
         private void MainForm_KeyDown(object sender, KeyEventArgs e)
@@ -643,7 +650,7 @@ namespace Steam_Desktop_Authenticator
             int totButtons = panelButtons.Controls.OfType<Button>().Count();
 
             Point curPos = new(0, 0);
-            foreach (Button but in panelButtons.Controls.OfType<Button>())
+            foreach (var but in panelButtons.Controls.OfType<Button>())
             {
                 but.Width = panelButtons.Width / totButtons;
                 but.Location = curPos;

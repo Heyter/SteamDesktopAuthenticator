@@ -3,37 +3,65 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <OutputType>WinExe</OutputType>
     <RootNamespace>Steam_Desktop_Authenticator</RootNamespace>
-    <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>0.2.2.%3a</ApplicationVersion>
-    <UseApplicationTrust>false</UseApplicationTrust>
-    <BootstrapperEnabled>true</BootstrapperEnabled>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <UseWindowsForms>true</UseWindowsForms>
-    <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
-  </PropertyGroup>
-  <PropertyGroup>
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <StartupObject>Steam_Desktop_Authenticator.Program</StartupObject>
+
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <TieredCompilation>true</TieredCompilation>
+    <UseParallelBuild>true</UseParallelBuild>
+    <MaxCpuCount>$(NUMBER_OF_PROCESSORS)</MaxCpuCount>
+
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
+    <PublishTrimmed>false</PublishTrimmed>
+    
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <ApplicationRevision>0</ApplicationRevision>
+    <ApplicationVersion>0.2.2.%3a</ApplicationVersion>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <DebugType>portable</DebugType>
+    <Optimize>false</Optimize>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+    <EnableNETAnalyzers>false</EnableNETAnalyzers>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
+
   <ItemGroup>
     <Compile Update="ConfirmationButton.cs">
       <SubType>Component</SubType>
     </Compile>
   </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\lib\SteamAuth\SteamAuth\SteamAuth.csproj" />
   </ItemGroup>
+
   <ItemGroup>
     <Content Include="icon.ico" />
   </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.9.1" />
-    <PackageReference Include="SteamKit2" Version="3.0.0-Beta.4" />
+    <PackageReference Include="SteamKit2" Version="3.0.2" />
+
+    <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="2.3.2" />
+    <PackageReference Include="System.Buffers" Version="4.5.1" />
   </ItemGroup>
+
+  <PropertyGroup>
+    <NoWarn>CA1416</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <DisableFastUpToDateCheck>false</DisableFastUpToDateCheck>
+    <MSBuildCache>true</MSBuildCache>
+    <IncrementalBuild>true</IncrementalBuild>
+  </PropertyGroup>
 </Project>
