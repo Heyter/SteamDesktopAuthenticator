@@ -147,23 +147,12 @@ namespace Steam_Desktop_Authenticator
             return true;
         }
 
-        private Task CreateConfirmationPanels(Confirmation[] confirmations)
+        private async Task CreateConfirmationPanels(Confirmation[] confirmations)
         {
-            if (confirmations.Length > 5)
-            {
-                return Task.Run(() =>
-                {
-                    Parallel.ForEach(confirmations, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, confirmation =>
-                    {
-                        var panel = CreateConfirmationPanel(confirmation);
-                        _confirmationsContainer.Invoke((MethodInvoker)(() =>
-                        {
-                            _confirmationsContainer.Controls.Add(panel);
-                        }));
-                    });
-                });
-            }
-            else
+            if (confirmations.Length == 0)
+                return;
+
+            if (confirmations.Length <= 5)
             {
                 for (int i = 0; i < confirmations.Length; i++)
                 {
@@ -172,7 +161,23 @@ namespace Steam_Desktop_Authenticator
                     _confirmationsContainer.Controls.Add(panel);
                 }
 
-                return Task.CompletedTask;
+                return;
+            }
+
+            var panels = new Panel[confirmations.Length];
+
+            await Task.Run(() =>
+            {
+                Parallel.For(0, confirmations.Length, i =>
+                {
+                    panels[i] = CreateConfirmationPanel(confirmations[i]);
+                });
+            });
+
+            for (int i = 0; i < panels.Length; i++)
+            {
+                Panel panel = panels[i];
+                _confirmationsContainer.Controls.Add(panel);
             }
         }
 
@@ -295,7 +300,9 @@ namespace Steam_Desktop_Authenticator
             }
             else
             {
-                await LoadData();
+                button.ParentPanel.Enabled = false;
+                button.ParentPanel.ForeColor = Color.Red;
+                button.Text = "Failed...";
             }
         }
 

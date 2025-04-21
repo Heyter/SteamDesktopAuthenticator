@@ -33,7 +33,7 @@ namespace Steam_Desktop_Authenticator
         public void StartSilent(bool silent) => _startSilent = silent;
 
         // Form event handlers
-        private async void MainForm_Shown(object sender, EventArgs e)
+        private void MainForm_Shown(object sender, EventArgs e)
         {
             labelVersion.Text = $"v{Application.ProductVersion}";
 
@@ -54,7 +54,7 @@ namespace Steam_Desktop_Authenticator
             _manifest.FirstRun = false;
             _manifest.Save();
 
-            await TimerSteamGuard_TickAsync();
+            TimerSteamGuard_Tick(new object(), EventArgs.Empty);
 
             if (_manifest.Encrypted)
             {
@@ -367,9 +367,8 @@ namespace Steam_Desktop_Authenticator
             trayAccountList.Items.AddRange([.. names]);
         }
 
-
         // Timers
-        private async Task TimerSteamGuard_TickAsync()
+        private async void TimerSteamGuard_Tick(object sender, EventArgs e)
         {
             lblStatus.Text = "Aligning time with Steam...";
             _steamTime = await TimeAligner.GetSteamTimeAsync().ConfigureAwait(false);
@@ -384,33 +383,7 @@ namespace Steam_Desktop_Authenticator
             }
         }
 
-        private async void TimerSteamGuard_Tick(object sender, EventArgs e)
-        {
-            try
-            {
-                timerSteamGuard.Enabled = false;
-                await TimerSteamGuard_TickAsync().ConfigureAwait(false);
-            }
-            finally
-            {
-                timerSteamGuard.Enabled = true;
-            }
-        }
-
         private async void TimerTradesPopup_Tick(object sender, EventArgs e)
-        {
-            try
-            {
-                timerTradesPopup.Enabled = false;
-                await TimerTradesPopup_TickAsync().ConfigureAwait(false);
-            }
-            finally
-            {
-                timerTradesPopup.Enabled = true;
-            }
-        }
-
-        private async Task TimerTradesPopup_TickAsync()
         {
             if (_currentAccount == null || _popupFrm.Visible) return;
             if (!await _confirmationsSemaphore.WaitAsync(0).ConfigureAwait(false)) return;
